@@ -1,0 +1,8 @@
+# Installed into the TTS assignment's shared environment (..\..\TTS\.venv)
+# by Setup-Demo.ps1. PyTorch itself comes from the TTS setup.
+flask
+requests
+numpy
+scikit-learn
+openai-whisper
+sounddevice
