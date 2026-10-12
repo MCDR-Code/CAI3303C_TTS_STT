@@ -38,6 +38,7 @@ Examples:
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
@@ -93,7 +94,13 @@ def speech_to_text(model, audio):
 
     english = text
     if lang != "en":
-        english = model.transcribe(audio, task="translate", fp16=fp16)["text"].strip()
+        # Tell Whisper the language it already detected, so the translate pass does not
+        # guess again (on short clips it can drift into unrelated words), and use beam
+        # search (try 5 candidate translations, keep the most likely) instead of the
+        # first guess.
+        english = model.transcribe(audio, task="translate", language=lang, fp16=fp16,
+                                   beam_size=5, temperature=0.0,
+                                   condition_on_previous_text=False)["text"].strip()
     return text, lang, english
 
 
@@ -108,13 +115,27 @@ FILLER = ["a", "an", "the", "is", "are", "am", "be", "do", "does", "can",
           "tell", "about", "exactly", "has", "have"]
 
 
+def simple_stem(word):
+    """Treat plurals like the singular: "languages" -> "language", "questions" -> "question".
+    A very small stemmer, so TF-IDF doesn't see them as unrelated words."""
+    if len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
+def tokenize(text):
+    """Lowercase, split into words, drop filler words, then stem."""
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    return [simple_stem(w) for w in words if w not in FILLER]
+
+
 class FAQMatcher:
     """Turn questions into TF-IDF vectors and pick the closest one by cosine similarity."""
 
     def __init__(self, path):
         with open(path, encoding="utf-8") as f:
             self.faq = json.load(f)
-        self.vectorizer = TfidfVectorizer(lowercase=True, stop_words=FILLER)
+        self.vectorizer = TfidfVectorizer(tokenizer=tokenize, token_pattern=None, lowercase=False)
         # Each FAQ entry has a few rewordings of the same question, like the
         # FAQ case study from Week 6. Every rewording gets its own vector.
         self.phrasings, self.owner = [], []

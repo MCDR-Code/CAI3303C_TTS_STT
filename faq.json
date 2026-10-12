@@ -12,7 +12,11 @@
     "questions": [
       "What languages can you speak?",
       "Do you speak Spanish or Creole?",
-      "Which languages do you understand?"
+      "Which languages do you understand?",
+      "What language do you speak?",
+      "What languages can you talk in?",
+      "Can you speak other languages?",
+      "What languages do you know?"
     ],
     "answer_en": "When you speak to me, I can understand many languages, including English, Spanish and Haitian Creole. Right now, I answer in English. If you type, please type in English.",
     "answer_es": "Cuando usted me habla, entiendo muchos idiomas, incluyendo inglés, español y criollo haitiano. Contesto en inglés o en español, y por ahora mi voz funciona mejor en inglés. Si escribe su pregunta, por favor escríbala en inglés."

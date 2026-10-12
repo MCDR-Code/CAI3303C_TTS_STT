@@ -89,6 +89,47 @@
     @media (max-width:800px) { .workspace { grid-template-columns:1fr; } .hero { padding-top:30px; } .card { padding:23px; } }
     @media (max-width:480px) { .shell { padding:0 16px; } .nav { min-height:80px; } .nav-right { flex-direction:column; align-items:flex-end; gap:6px; font-size:11px; } .brand small { font-size:10px; } .options { grid-template-columns:1fr; } footer { flex-direction:column; } }
     @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+    /* Compact layout, so the whole demo fits on screen for recording */
+    body { line-height:1.4; }
+    .nav { min-height:60px; }
+    .mark { width:36px; height:36px; font-size:20px; border-radius:11px; }
+    .hero { padding:16px 0 12px; }
+    h1 { font-size:clamp(26px,3.6vw,36px); margin:4px 0 6px; }
+    .hero p { font-size:15px; }
+    .workspace { gap:18px; }
+    .card { padding:18px 22px; border-radius:16px; }
+    h2 { font-size:18px; margin-bottom:2px; }
+    .sub { margin:0 0 10px; font-size:13px; }
+    label,.label { margin-bottom:4px; }
+    textarea { min-height:0; height:auto; padding:9px 12px; }
+    button { padding:8px 14px; border-radius:10px; }
+    select { min-height:38px; padding:7px 10px; }
+    .options { margin:10px 0 4px; gap:10px; }
+    .hint { margin:3px 0 8px; line-height:1.35; }
+    .warning { padding:7px 10px; margin-bottom:8px; }
+    .examples { margin-top:12px; }
+    .chips { gap:6px; }
+    .chip { padding:5px 10px; }
+    .divider { margin:12px 0 10px; }
+    .upload { margin-top:10px; }
+    .upload button { margin-top:8px; }
+    input::file-selector-button { padding:6px 9px; }
+    .status { margin-top:10px; padding:9px 12px; }
+    .empty { padding:22px 12px; }
+    .orb { width:56px; height:56px; font-size:22px; margin-bottom:14px; box-shadow:0 0 0 8px #f2f8fc; }
+    .question { margin:10px 0 6px; }
+    .answer-text { font-size:18px; line-height:1.45; }
+    .translation { margin-top:10px; padding:8px 12px; }
+    .metadata { margin-top:12px; padding-top:10px; }
+    dl { gap:6px 12px; margin-top:6px; }
+    .voice-panel { margin-top:12px; padding-top:10px; }
+    .voice-panel p { margin-bottom:6px; }
+    audio { margin:6px 0; }
+    .voice-actions { margin-top:6px; }
+    .about { margin:14px 0; padding:12px 18px; }
+    footer { padding-bottom:16px; }
+    .voice-actions button { font-size:13px; padding:6px 11px; }
+    .voice-actions .stop { background:#fff0f1; border-color:#e2a7ac; color:var(--red); }
   </style>
 </head>
 <body>
@@ -112,7 +153,7 @@
         <h2 id="askTitle">Ask Sky</h2><p class="sub">Start with an example, or ask in your own words.</p>
         <form id="questionForm">
           <label for="questionInput">Your question</label>
-          <textarea id="questionInput" name="text" placeholder="What is Sky?" required maxlength="4000" aria-describedby="typingHint"></textarea>
+          <textarea id="questionInput" name="text" rows="2" placeholder="What is Sky?" required maxlength="4000" aria-describedby="typingHint"></textarea>
           <div class="options">
             <div><label for="voice">Voice output</label><select id="voice"><option value="model" selected>F5-TTS (model)</option><option value="browser">Browser voice (not the model)</option></select></div>
           </div>
@@ -130,11 +171,11 @@
         </div></div>
         <div class="divider">or ask with audio</div>
         <button id="recordButton" class="record" type="button" aria-pressed="false" aria-describedby="micHint"><span class="record-indicator" aria-hidden="true"></span><span id="recordLabel">Record a question</span></button>
-        <p class="hint" id="micHint">Microphone access requires HTTPS or localhost. Press again to stop and send. Recordings stop automatically after 60 seconds.</p>
+        <p class="hint" id="micHint">Press again to stop and send (up to 60 seconds).</p>
         <div class="upload">
           <label for="audioFile">Upload a recorded question</label>
           <input id="audioFile" type="file" accept=".webm,.wav,.mp3,.m4a,.ogg,audio/webm,audio/wav,audio/mpeg,audio/mp4,audio/ogg" aria-describedby="uploadHint">
-          <p class="hint" id="uploadHint">WebM, WAV, MP3, M4A or OGG. Spoken questions in other languages are translated into English for FAQ matching, and Sky answers in English.</p>
+          <p class="hint" id="uploadHint">WAV, MP3, WebM, M4A or OGG, in any language. Sky answers in English.</p>
           <button id="uploadButton" type="button" disabled>Transcribe &amp; ask Sky</button>
         </div>
         <div id="status" class="status" hidden><p id="statusText" role="status" aria-live="polite"></p><p class="elapsed" id="elapsed" aria-live="off"></p></div>
@@ -163,6 +204,7 @@
             <audio id="audioPlayer" controls preload="metadata" aria-label="Sky’s generated WAV answer" hidden></audio>
             <div class="voice-actions">
               <button id="replayButton" type="button" disabled>Read answer again</button>
+              <button id="cancelVoiceButton" type="button" class="stop" hidden>Stop, wrong question</button>
               <button id="saveVoiceButton" type="button" hidden>Save this answer's voice</button>
               <button id="clearSavedButton" type="button">Clear saved answers</button>
             </div>
@@ -176,13 +218,13 @@
   <script>
     'use strict';
     const $ = id => document.getElementById(id);
-    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','saveVoiceButton','clearSavedButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
+    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','saveVoiceButton','clearSavedButton','cancelVoiceButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
     const chips = Array.from(document.querySelectorAll('.chip'));
     const micSupported = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
     const speechSupported = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
     let busy = false, acquiringMic = false, recorder = null, stream = null;
     let recordingTimeout = null, elapsedTimer = null, audioUrl = null, lastAnswer = null;
-    let disposed = false, speechFinish = null, lastWav = null;
+    let disposed = false, speechFinish = null, lastWav = null, voiceController = null, voiceCancelled = false;
     const requests = new Set();
 
     function updateControls() {
@@ -249,6 +291,7 @@
     async function request(path, options = {}, timeout = 180000) {
       const controller = new AbortController();
       requests.add(controller);
+      if (options.voice) voiceController = controller;
       const timer = setTimeout(() => controller.abort(), timeout);
       try {
         const response = await fetch(path, { ...options, signal:controller.signal });
@@ -262,12 +305,14 @@
         if (options.audio) return { blob: await response.blob(), source: response.headers.get('X-Sky-Source') || 'generated' };
         return await response.json();
       } catch (error) {
+        if (error.name === 'AbortError' && options.voice && voiceCancelled) throw error;
         if (error.name === 'AbortError') throw new Error(`${path} timed out. The server may still be processing; please try again later.`);
         if (error instanceof TypeError) throw new Error(`Cannot reach ${path}. Check the server connection and try again. ${error.message}`);
         throw error;
       } finally {
         clearTimeout(timer);
         requests.delete(controller);
+        if (voiceController === controller) voiceController = null;
       }
     }
 
@@ -364,10 +409,28 @@
       ui.voiceStatus.textContent = 'Getting the voice. Your text answer is ready above.';
       progress('Getting the voice… a new answer takes about 20 seconds with F5-TTS.');
       const started = performance.now();
-      const { blob, source } = await request('/tts', {
-        method:'POST', headers:{ 'Content-Type':'application/json' },
-        body:JSON.stringify({ username:'default', text:answer.answer }), audio:true
-      }, 600000);
+      voiceCancelled = false;
+      ui.cancelVoiceButton.hidden = false;
+      let result = null;
+      try {
+        for (;;) {
+          try {
+            result = await request('/tts', {
+              method:'POST', headers:{ 'Content-Type':'application/json' },
+              body:JSON.stringify({ username:'default', text:answer.answer }), audio:true, voice:true
+            }, 600000);
+            break;
+          } catch (error) {
+            // 429 = the TTS server is still finishing a voice that was stopped. Wait and try again.
+            if (voiceCancelled || !/\(429\)/.test(error.message) || performance.now() - started > 120000) throw error;
+            ui.voiceStatus.textContent = 'Waiting for the TTS server to finish the stopped voice, then making this one…';
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      } finally {
+        ui.cancelVoiceButton.hidden = true;
+      }
+      const { blob, source } = result;
       const took = ((performance.now() - started) / 1000).toFixed(1);
       const origin = source === 'saved'
         ? `Saved answer: played in ${took} s, no F5-TTS needed.`
@@ -404,7 +467,9 @@
         await new Promise(resolve => setTimeout(resolve, 0));
         await outputVoice();
       } catch (error) {
-        if (!disposed) {
+        if (voiceCancelled) {
+          ui.voiceStatus.textContent = 'Voice stopped. Ask your question again.';
+        } else if (!disposed) {
           showError(error);
           ui.voiceStatus.textContent = lastAnswer ? 'The displayed answer is available. You can retry voice playback.' : 'No answer yet.';
         }
@@ -518,7 +583,10 @@
       clearError();
       updateControls();
       try { await outputVoice(); }
-      catch (error) { showError(error); ui.voiceStatus.textContent = 'Voice output failed. Your text answer is still available.'; }
+      catch (error) {
+        if (voiceCancelled) ui.voiceStatus.textContent = 'Voice stopped.';
+        else { showError(error); ui.voiceStatus.textContent = 'Voice output failed. Your text answer is still available.'; }
+      }
       finally { busy = false; endProgress(); updateControls(); }
     });
     ui.audioPlayer.addEventListener('error', () => {
@@ -527,6 +595,10 @@
       ui.voiceStatus.textContent = 'Audio playback failed. Your text answer is still available.';
     });
     ui.audioPlayer.addEventListener('ended', () => { ui.voiceStatus.textContent = 'Playback finished. Use the controls to listen again.'; });
+    ui.cancelVoiceButton.addEventListener('click', () => {
+      voiceCancelled = true;
+      if (voiceController) voiceController.abort();
+    });
     ui.saveVoiceButton.addEventListener('click', async () => {
       if (busy || !lastWav) return;
       clearError();

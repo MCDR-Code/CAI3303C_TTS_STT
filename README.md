@@ -6,46 +6,101 @@ Sky is Miami Dade College's planned virtual concierge (described by Professor Ga
 
     microphone or recording -> Whisper (speech to text) -> FAQ answer (TF-IDF + cosine similarity) -> F5-TTS (text to speech) -> speaker
 
-## How to try it
+## What you need
 
-There is no hosted version. The demo runs on your own Windows computer, together with the TTS server from the class exercise. A recorded walkthrough was made for the class presentation.
-
-You need Windows 10/11, Python 3.12, Git, ffmpeg, about 10 GB of free disk space, and a microphone if you want to speak to Sky. An NVIDIA graphics card is strongly recommended: Sky's spoken answer takes about 23 seconds on an RTX 2080 Super, and several minutes on a CPU.
-
-## How this project relates to the TTS assignment
+The demo runs on your own Windows computer; there is no hosted version. It uses two repositories that work together:
 
 | Repository | What it is |
 | --- | --- |
-| [CAI3303C_F5-TTS](https://github.com/MCDR-Code/CAI3303C_F5-TTS) | The class exercise: the fixed F5-TTS server (`imv_api.py`), the Java clients and the Python environment. It runs on port 5000. |
-| CAI3303C_TTS_STT (this repository) | The team project. It adds speech recognition, the FAQ "brain" and the web page, and runs on port 5001. |
+| [CAI3303C_F5-TTS](https://github.com/MCDR-Code/CAI3303C_F5-TTS) | The class exercise: the fixed F5-TTS server (`imv_api.py`). It makes the voice and runs on port 5000. It also holds the shared Python environment. |
+| CAI3303C_TTS_STT (this repository) | The team project: Whisper speech recognition, the FAQ "brain" and the web page. It runs on port 5001 and asks the TTS server for each spoken answer. |
 
-This project contains no copy of the TTS code. It sends each answer to the TTS server over HTTP (`POST http://localhost:5000/tts`) and plays the WAV that comes back. It also uses the TTS project's Python environment (its `.venv` folder), so PyTorch is installed only once.
+Requirements:
 
-## Setup (once)
+- Windows 10 or 11, and about 10 GB of free disk space
+- **Python 3.12**. Check in PowerShell with `python --version`. If it is missing, install it from python.org and tick **"Add python.exe to PATH"**, or run `winget install Python.Python.3.12`.
+- **Git**: `winget install Git.Git`
+- **ffmpeg** (Whisper uses it to read recordings): `winget install Gyan.FFmpeg`
+- A microphone, to speak to Sky (optional: you can also type or upload a recording)
+- **Recommended: an NVIDIA graphics card.** Each new spoken answer takes about 20 seconds on an RTX 2080 Super, but several minutes on a CPU.
 
-1. Clone both repositories into the same parent folder:
+After installing anything with winget, close PowerShell and open a new window so it finds the new programs.
 
-   ```text
+## Install (once, about 20 to 30 minutes)
+
+Open PowerShell in the folder where you keep projects and run these steps in order.
+
+1. **Allow the setup scripts to run** (once per Windows account):
+
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+   ```
+
+2. **Download both repositories into the same folder.** Use `git clone`, not "Download ZIP": the ZIP leaves out the F5-TTS source, which is linked as a submodule.
+
+   ```powershell
    git clone --recurse-submodules https://github.com/MCDR-Code/CAI3303C_F5-TTS.git
    git clone https://github.com/MCDR-Code/CAI3303C_TTS_STT.git
    ```
 
-   The demo looks for the TTS project next to it (`..\CAI3303C_F5-TTS`). If you keep it somewhere else, set `SKY_TTS_ROOT` to its folder.
-2. Set up the TTS project first: in `CAI3303C_F5-TTS`, run `.\Setup-TTS.ps1`. If you have an NVIDIA graphics card, also install the CUDA build of PyTorch as its README explains.
-3. In this folder, run `.\Setup-Demo.ps1`. It adds Whisper and the other demo packages to the shared environment, downloads the Whisper model, and reports whether the graphics card is in use.
+3. **Set up the TTS server** (creates the Python environment and installs F5-TTS):
 
-## Run the web demo
+   ```powershell
+   cd CAI3303C_F5-TTS
+   .\Setup-TTS.ps1
+   ```
+
+4. **Only with an NVIDIA graphics card:** switch PyTorch to the graphics-card build (about 2 GB):
+
+   ```powershell
+   .\Enable-GPU.ps1
+   ```
+
+   It should end with `graphics card in use: True`.
+
+5. **Set up the Sky demo** (adds Whisper and the demo's packages, downloads the Whisper model):
+
+   ```powershell
+   cd ..\CAI3303C_TTS_STT
+   .\Setup-Demo.ps1
+   ```
+
+## Run the demo
 
 ```powershell
 .\Start-Demo.ps1
 ```
 
-Open **http://localhost:5001**. If the TTS server isn't running, the script starts it in its own window first.
+It opens the TTS server in a second window, then starts the demo. Open **http://localhost:5001** in Chrome or Edge. Leave both windows open while you use it; Ctrl+C in each window stops them.
 
-- Type **What is Sky?** to show a known answer.
-- Type **How much is tuition?** to show the fallback. The demo tells the person to ask a staff member; it does not transfer anyone.
-- To show another language, **speak or upload** the question (for example "¿Hablas criollo?"). Whisper translates it to English and Sky answers in English. Typed questions must be in English.
-- Voice output: **Browser voice (fast)** uses the browser's built-in voice, not F5-TTS. Say so if you use it. **F5-TTS (model)** asks the TTS server to generate the audio.
+The **first** spoken answer downloads the F5-TTS model (about 1.3 GB) and can take several minutes. After that, a new answer takes about 20 seconds on a graphics card. Ask one practice question before showing it to anyone.
+
+## Using the page
+
+- **Ask:** type a question in English and press **Ask Sky**, click one of the six topic buttons, press **Record a question** (press again to stop and send), or upload a recording. Spoken and uploaded questions can be in many languages: Whisper writes down what you said and translates it to English to find the answer.
+- **The answer** appears first as text, with **"Behind the answer"**: the closest FAQ question, the similarity score, the language heard and the timings. Below the 0.5 threshold, Sky says it does not know instead of guessing.
+- **The voice:** **F5-TTS (model)** is the default. While it is being made, **Stop, wrong question** cancels it. **Browser voice (not the model)** uses Windows' built-in voice instead; it is instant but it is not F5-TTS.
+- **Save this answer's voice** keeps the WAV, so the next time that answer comes up it plays instantly. **Clear saved answers** removes them, so F5-TTS makes every answer live again.
+
+Good questions to try: "What is Sky?" (typed), "¿Hablas criollo?" (spoken; Sky understands Spanish and answers in English), and "How much is tuition?" (outside the FAQ, so Sky says it does not know).
+
+## Without an NVIDIA graphics card
+
+Everything works, but each new voice takes several minutes on the CPU. To keep the demo moving, save the answers once (**Save this answer's voice**) before presenting, or choose **Browser voice** and say that it is not the model.
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| "running scripts is disabled on this system" | Run step 1 again, or start a script with `powershell -ExecutionPolicy Bypass -File .\Start-Demo.ps1` |
+| `python` is not recognized, or the version is not 3.12 | Install Python 3.12 with "Add python.exe to PATH", then open a new PowerShell |
+| Setup-TTS fails at the F5-TTS step, or the `F5-TTS` folder is empty | The repository was downloaded as a ZIP. Delete it and use `git clone --recurse-submodules` (step 2) |
+| "The TTS environment was not found" | Keep both repositories in the same parent folder, or set `SKY_TTS_ROOT` to the CAI3303C_F5-TTS folder |
+| Recordings fail with an ffmpeg error | Install ffmpeg (`winget install Gyan.FFmpeg`) and open a new PowerShell |
+| The microphone button does nothing | Use http://localhost:5001 (not the PC's IP address) and allow microphone access in the browser |
+| Voice takes minutes | PyTorch is on the CPU. Run `.\Enable-GPU.ps1` in CAI3303C_F5-TTS (NVIDIA cards only) |
+| "TTS server at http://localhost:5000 is not reachable" | Start it with `.\Start-TTS.ps1` in CAI3303C_F5-TTS, or just run `.\Start-Demo.ps1` again |
+| Page looks old after an update | Refresh with Ctrl+F5 |
 
 ## Saved answers (faster replies)
 
@@ -83,7 +138,7 @@ It prints what Whisper heard, the matched FAQ question and score, and the time e
 | `TTS_URL` | `http://localhost:5000` | Where the TTS server is |
 | `SKY_PORT` | `5001` | Port for this demo |
 | `SKY_HOST` | `127.0.0.1` | Only this PC can open the demo. Use `0.0.0.0` to allow other devices on the network |
-| `WHISPER_MODEL` | `base` | Whisper size. `small` is more accurate and fine on the graphics card |
+| `WHISPER_MODEL` | `base` | Whisper size. Whisper's translation can miss short questions: both `base` and `small` turned "¿Quién te creó?" into "Who do you think?" |
 | `SKY_TTS_ROOT` | `..\CAI3303C_F5-TTS`, or `..\..\TTS` | Location of the TTS project folder |
 
 ## Scope
