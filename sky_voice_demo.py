@@ -198,7 +198,7 @@ def main():
     # Step 3: find the answer
     t = time.perf_counter()
     entry, matched, score = matcher.best_match(english)
-    answer = choose_answer(entry, score, lang)
+    answer = choose_answer(entry, score, "en")   # English answers only for now
     timings["find answer"] = time.perf_counter() - t
 
     print(f"\nClosest FAQ:   {matched}  (cosine similarity {score:.2f}, threshold {THRESHOLD})")

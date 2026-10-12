@@ -31,13 +31,27 @@ class SkyDemoTests(unittest.TestCase):
         response = self.ask("How do you recognize my voice?")
         self.assertIn("Whisper", response.json["answer"])
 
-    def test_spanish_answer(self):
-        response = self.ask("What is Sky?", "es")
-        self.assertEqual(response.json["language"], "es")
-        self.assertIn("Soy Sky", response.json["answer"])
+    def test_answers_are_english(self):
+        response = self.client.post("/demo/answer", json={"text": "What is Sky?"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["language"], "en")
+        self.assertIn("I am Sky", response.json["answer"])
+
+    def test_spoken_spanish_gets_english_answer(self):
+        heard = ("¿Reconoces mi voz?", "es", "Do you recognize my voice?")
+        with patch.dict(sys.modules, {"whisper": MagicMock()}), \
+             patch.object(app, "speech_to_text", return_value=heard), \
+             patch.object(app, "whisper_model", MagicMock()):
+            data = {"file": (io.BytesIO(b"fake audio"), "q.wav")}
+            response = self.client.post("/demo/transcribe", data=data,
+                                        content_type="multipart/form-data")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["spoken_language"], "es")
+        self.assertEqual(response.json["language"], "en")
+        self.assertIn("A speech to text model called Whisper", response.json["answer"])
 
     def test_validation(self):
-        for payload in [None, [], {}, {"text": 2}, {"text": ""}, {"text": "Sky", "language": "fr"}]:
+        for payload in [None, [], {}, {"text": 2}, {"text": ""}]:
             self.assertEqual(self.client.post("/demo/answer", json=payload).status_code, 400)
         self.assertEqual(self.client.post("/demo/transcribe").status_code, 400)
         self.assertEqual(self.client.post("/tts", json=[]).status_code, 400)

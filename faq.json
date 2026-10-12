@@ -5,8 +5,8 @@
       "Tell me about Sky",
       "What is the virtual concierge?"
     ],
-    "answer_en": "I am Sky, Miami Dade College's virtual concierge. I can answer questions about the college in the language you speak to me.",
-    "answer_es": "Soy Sky, la conserje virtual de Miami Dade College. Puedo contestar preguntas sobre el colegio en el idioma que usted me hable."
+    "answer_en": "I am Sky, Miami Dade College's virtual concierge. I can understand many spoken languages, but typed questions only in English. Right now, I answer in English.",
+    "answer_es": "Soy Sky, la conserje virtual de Miami Dade College. Entiendo muchos idiomas hablados, pero las preguntas escritas solo en inglés. Contesto en inglés o en español."
   },
   {
     "questions": [
@@ -14,8 +14,8 @@
       "Do you speak Spanish or Creole?",
       "Which languages do you understand?"
     ],
-    "answer_en": "I can listen in many languages, including English, Spanish and Haitian Creole. My voice is strongest in English right now.",
-    "answer_es": "Puedo escuchar en muchos idiomas, incluyendo inglés, español y criollo haitiano. Por ahora mi voz funciona mejor en inglés."
+    "answer_en": "When you speak to me, I can understand many languages, including English, Spanish and Haitian Creole. Right now, I answer in English. If you type, please type in English.",
+    "answer_es": "Cuando usted me habla, entiendo muchos idiomas, incluyendo inglés, español y criollo haitiano. Contesto en inglés o en español, y por ahora mi voz funciona mejor en inglés. Si escribe su pregunta, por favor escríbala en inglés."
   },
   {
     "questions": [

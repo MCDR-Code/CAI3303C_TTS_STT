@@ -9,7 +9,7 @@
 ## Three-minute walkthrough
 
 1. Type **What languages can you speak?** Show the answer, the matched question and the similarity score.
-2. Upload or say **¿Hablas criollo?** Show Whisper's transcript, the detected language (Spanish), the English translation used for matching, and the Spanish answer. Point out that F5-TTS's base model was trained on English and Chinese, so the Spanish voice may sound off.
+2. Upload or say **¿Hablas criollo?** Show Whisper's transcript, the detected language (Spanish), the English translation used for matching, and the English answer. Explain that Sky answers in English for now because F5-TTS's base model was trained on English and Chinese, not Spanish.
 3. Type **How much is tuition?** The score is below 0.5, so Sky says to ask a staff member instead of guessing.
 4. Play an answer with **F5-TTS (model)** and point out the wait time.
 
@@ -21,4 +21,4 @@
 
 ## What to explain
 
-Whisper turns speech into text. TF-IDF and cosine similarity (Week 6) pick the closest FAQ question. The TTS server from Week 4 turns the answer into speech with F5-TTS. Current limits: exact-word matching, a six-topic FAQ, Spanish and Creole voice quality, and generation time.
+Whisper turns speech into text. TF-IDF and cosine similarity (Week 6) pick the closest FAQ question. The TTS server from Week 4 turns the answer into speech with F5-TTS. Current limits: exact-word matching, a six-topic FAQ, English-only answers (the voice model has no Spanish training), and generation time.

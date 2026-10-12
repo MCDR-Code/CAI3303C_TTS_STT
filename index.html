@@ -104,7 +104,7 @@
     <section class="hero" aria-labelledby="title">
       <span class="eyebrow">Meet your virtual concierge</span>
       <h1 id="title">A question. A conversation.</h1>
-      <p>Get to know Sky. Type a question or let your voice do the talking, in English or Spanish.</p>
+      <p>Get to know Sky. Type a question in English, or ask out loud in many languages. Sky answers in English.</p>
     </section>
     <div class="workspace">
       <section class="card" aria-labelledby="askTitle">
@@ -113,11 +113,10 @@
           <label for="questionInput">Your question</label>
           <textarea id="questionInput" name="text" placeholder="What is Sky?" required maxlength="4000" aria-describedby="typingHint"></textarea>
           <div class="options">
-            <div><label for="language">Answer language</label><select id="language"><option value="en">English</option><option value="es">Español</option></select></div>
-            <div><label for="voice">Voice output</label><select id="voice"><option value="browser">Browser voice (fast)</option><option value="model">F5-TTS (model)</option></select></div>
+            <div><label for="voice">Voice output</label><select id="voice"><option value="model" selected>F5-TTS (model)</option><option value="browser">Browser voice (not the model)</option></select></div>
           </div>
-          <p class="hint" id="typingHint">For typed questions, English works best for FAQ matching. The language choice sets your typed answer’s language.</p>
-          <p class="warning" id="modelWarning" hidden>F5-TTS runs on the server and can take several minutes on a CPU. English is preferred for the model voice; Spanish pronunciation may be less reliable.</p>
+          <p class="hint" id="typingHint">Type questions in English. Spoken questions can be in many languages. Sky answers in English.</p>
+          <p class="warning" id="modelWarning">F5-TTS runs on the server’s graphics card and takes about 20 seconds.</p>
           <button class="primary ask" id="askButton" type="submit">Ask Sky →</button>
         </form>
         <div class="examples"><span class="label">Try one of the six FAQ topics</span><div class="chips" id="examples">
@@ -134,7 +133,7 @@
         <div class="upload">
           <label for="audioFile">Upload a recorded question</label>
           <input id="audioFile" type="file" accept=".webm,.wav,.mp3,.m4a,.ogg,audio/webm,audio/wav,audio/mpeg,audio/mp4,audio/ogg" aria-describedby="uploadHint">
-          <p class="hint" id="uploadHint">WebM, WAV, MP3, M4A or OGG. Spoken Spanish is translated into English for FAQ matching; the answer follows the detected language.</p>
+          <p class="hint" id="uploadHint">WebM, WAV, MP3, M4A or OGG. Spoken questions in other languages are translated into English for FAQ matching, and Sky answers in English.</p>
           <button id="uploadButton" type="button" disabled>Transcribe &amp; ask Sky</button>
         </div>
         <div id="status" class="status" hidden><p id="statusText" role="status" aria-live="polite"></p><p class="elapsed" id="elapsed" aria-live="off"></p></div>
@@ -151,7 +150,7 @@
             <span class="label">Behind the answer</span>
             <dl>
               <div><dt>Closest FAQ question</dt><dd id="matched">—</dd></div>
-              <div><dt>Answer language</dt><dd id="detectedLanguage">—</dd></div>
+              <div><dt>Language heard</dt><dd id="detectedLanguage">—</dd></div>
               <div><dt>Similarity score (not confidence)</dt><dd id="score">—</dd></div>
               <div><dt>Match threshold</dt><dd id="threshold">—</dd></div>
               <div><dt>Transcription time (server)</dt><dd id="transcribeTime">—</dd></div>
@@ -166,13 +165,13 @@
         </div>
       </section>
     </div>
-    <aside class="about"><h2>A small demo, with a clear scope</h2><p>Sky matches questions against six predefined FAQ topics: its identity, languages, speech recognition, voice generation, locations, and student creators. This is not a general college help desk. English and Spanish answers are supported; English is preferred for FAQ matching and F5-TTS voice output. Spoken Spanish can be translated into English for matching. If Sky cannot find an answer, this demo cannot connect you to a real person.</p></aside>
+    <aside class="about"><h2>A small demo, with a clear scope</h2><p>Sky matches questions against six predefined FAQ topics: its identity, languages, speech recognition, voice generation, locations, and student creators. This is not a general college help desk. Sky understands many spoken languages: Whisper translates spoken questions into English for matching. Typed questions must be in English. For now Sky answers only in English, because the F5-TTS voice model was trained on English and Chinese speech, not Spanish. If Sky cannot find an answer, this demo cannot connect you to a real person.</p></aside>
     <footer><span>Sky · Natural Language Processing school demo</span><span><button id="healthButton" type="button">Recheck connection</button></span></footer>
   </main>
   <script>
     'use strict';
     const $ = id => document.getElementById(id);
-    const ui = Object.fromEntries(['questionForm','questionInput','language','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
+    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
     const chips = Array.from(document.querySelectorAll('.chip'));
     const micSupported = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
     const speechSupported = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
@@ -184,7 +183,7 @@
     function updateControls() {
       const recording = recorder !== null;
       const locked = busy || acquiringMic || recording;
-      for (const element of [ui.questionInput, ui.language, ui.voice, ui.askButton, ui.audioFile, ...chips]) element.disabled = locked;
+      for (const element of [ui.questionInput, ui.voice, ui.askButton, ui.audioFile, ...chips]) element.disabled = locked;
       ui.uploadButton.disabled = locked || !ui.audioFile.files.length;
       ui.recordButton.disabled = busy || acquiringMic || !micSupported;
       ui.replayButton.disabled = locked || !lastAnswer;
@@ -288,7 +287,7 @@
     const seconds = value => numeric(value) ? `${value.toFixed(2)} s` : 'Not provided';
     function displayAnswer(data) {
       if (!data || typeof data.answer !== 'string' || !data.answer.trim()) throw new Error('The server returned no answer text. Please try again.');
-      const language = data.language === 'es' ? 'es' : 'en';
+      const language = 'en';   // Sky answers in English only for now
       // Replace handoff language from fallback responses: this demo has no human connection.
       const answer = data.fallback ? (language === 'es'
         ? 'No encontré una respuesta en los seis temas de preguntas frecuentes. Esta demostración no puede conectarte con una persona real. Prueba una de las preguntas de ejemplo.'
@@ -304,7 +303,8 @@
       ui.translation.hidden = !(typeof data.english === 'string' && data.english.trim());
       ui.englishText.textContent = typeof data.english === 'string' ? data.english : '';
       ui.matched.textContent = typeof data.matched === 'string' ? data.matched : 'Not provided';
-      ui.detectedLanguage.textContent = language === 'es' ? 'Spanish (es)' : 'English (en)';
+      const heard = typeof data.spoken_language === 'string' ? data.spoken_language : 'en';
+      ui.detectedLanguage.textContent = heard === 'en' ? 'English (en)' : heard === 'es' ? 'Spanish (es)' : heard === 'ht' ? 'Haitian Creole (ht)' : heard;
       ui.score.textContent = numeric(data.score) ? data.score.toFixed(3) : 'Not provided';
       ui.threshold.textContent = numeric(data.threshold) ? data.threshold.toFixed(3) : 'Not provided';
       ui.transcribeTime.textContent = seconds(data.transcribe_seconds);
@@ -479,7 +479,7 @@
       if (busy || recorder || acquiringMic) return;
       const text = ui.questionInput.value.trim();
       if (!text) { showError(new Error('Enter a question first.')); ui.questionInput.focus(); return; }
-      void processQuestion('/demo/answer', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ text, language:ui.language.value }) });
+      void processQuestion('/demo/answer', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ text }) });
     });
     chips.forEach(chip => chip.addEventListener('click', () => {
       ui.questionInput.value = chip.dataset.question;

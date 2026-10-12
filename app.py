@@ -40,13 +40,14 @@ def upload_too_large(error):
     return jsonify(error="Audio uploads must be no larger than 25 MB."), 413
 
 
-def answer_question(question, english, language):
+def answer_question(question, english, heard="en"):
+    """Sky answers in English only for now: the F5-TTS voice model has no Spanish training."""
     started = time.monotonic()
     with matcher_lock:
         entry, matched, score = matcher.best_match(english)
     return {
-        "question": question, "english": english, "language": language,
-        "answer": choose_answer(entry, score, language),
+        "question": question, "english": english, "language": "en", "spoken_language": heard,
+        "answer": choose_answer(entry, score, "en"),
         "matched": matched, "score": round(score, 3), "threshold": THRESHOLD,
         "fallback": score < THRESHOLD,
         "answer_seconds": round(time.monotonic() - started, 3),
@@ -87,13 +88,10 @@ def typed_answer():
     if not isinstance(payload, dict):
         return jsonify(error="Send a JSON object containing text."), 400
     text = payload.get("text")
-    language = payload.get("language", "en")
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
         return jsonify(error="Enter a question between 1 and 2000 characters."), 400
-    if language not in ("en", "es"):
-        return jsonify(error="Answer language must be en or es."), 400
     # Typed questions are matched as English; spoken audio is translated by Whisper.
-    return jsonify(answer_question(text.strip(), text.strip(), language))
+    return jsonify(answer_question(text.strip(), text.strip()))
 
 
 @app.post("/demo/transcribe")
