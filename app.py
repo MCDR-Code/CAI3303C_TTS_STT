@@ -9,6 +9,7 @@ This app forwards the page's voice requests to that server.
 
 Run with Start-Demo.ps1, then open http://localhost:5001
 """
+import hashlib
 import os
 import tempfile
 import threading
@@ -25,6 +26,8 @@ HOST = os.getenv("SKY_HOST", "127.0.0.1")          # only this PC can reach the 
 PORT = int(os.getenv("SKY_PORT", "5001"))
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 AUDIO_TYPES = (".webm", ".wav", ".mp3", ".m4a", ".ogg", ".mp4", ".flac")
+# Saved answers: fixed FAQ answers only need to be spoken by F5-TTS once.
+SAVED_DIR = Path(os.getenv("SKY_SAVED_DIR", HERE / "saved_answers"))
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
@@ -130,18 +133,59 @@ def recorded_answer():
 
 
 # ------------------------------------------------------------------ voice
+def saved_path(voice, text):
+    """One WAV file per voice + answer text."""
+    key = hashlib.sha1(f"{voice}\n{text}".encode("utf-8")).hexdigest()[:16]
+    return SAVED_DIR / f"{key}.wav"
+
+
 @app.post("/tts")
 def speak():
-    """Forward the answer to the TTS assignment server and return its WAV."""
+    """Play a saved answer if there is one; otherwise ask the TTS server to generate it."""
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return jsonify(error="A JSON object with username and text is required."), 400
+    voice, text = payload.get("username"), payload.get("text")
+    if isinstance(voice, str) and isinstance(text, str):
+        saved = saved_path(voice, text)
+        if saved.is_file():
+            response = send_file(saved, mimetype="audio/wav")
+            response.headers["X-Sky-Source"] = "saved"
+            return response
     try:
         reply = requests.post(f"{TTS_URL}/tts", json=payload, timeout=600)
     except requests.RequestException:
         return jsonify(error=f"The TTS server at {TTS_URL} is not reachable. Start it with Start-TTS.ps1."), 503
-    return Response(reply.content, status=reply.status_code,
-                    content_type=reply.headers.get("Content-Type", "application/octet-stream"))
+    response = Response(reply.content, status=reply.status_code,
+                        content_type=reply.headers.get("Content-Type", "application/octet-stream"))
+    response.headers["X-Sky-Source"] = "generated"
+    return response
+
+
+@app.post("/demo/save_answer")
+def save_answer():
+    """Keep a generated WAV so the same answer plays instantly next time."""
+    upload = request.files.get("file")
+    voice, text = request.form.get("username", ""), request.form.get("text", "")
+    if upload is None or not voice or not text or len(text) > 2000:
+        return jsonify(error="Send the WAV file with its username and text."), 400
+    data = upload.read()
+    if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        return jsonify(error="Only WAV audio from F5-TTS can be saved."), 400
+    SAVED_DIR.mkdir(parents=True, exist_ok=True)
+    saved_path(voice, text).write_bytes(data)
+    return jsonify(saved=True, count=len(list(SAVED_DIR.glob("*.wav"))))
+
+
+@app.post("/demo/clear_saved")
+def clear_saved():
+    """Remove all saved answers, so F5-TTS generates them live again."""
+    removed = 0
+    if SAVED_DIR.is_dir():
+        for wav in SAVED_DIR.glob("*.wav"):
+            wav.unlink()
+            removed += 1
+    return jsonify(removed=removed)
 
 
 if __name__ == "__main__":

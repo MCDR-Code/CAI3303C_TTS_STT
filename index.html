@@ -76,6 +76,7 @@
     dd { font-size:13px; font-weight:600; margin:2px 0 0; overflow-wrap:anywhere; }
     .voice-panel { border-top:1px solid var(--line); margin-top:22px; padding-top:18px; }
     .voice-panel p { font-size:13px; color:var(--muted); margin:0 0 12px; }
+    .voice-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
     audio { display:block; width:100%; margin:12px 0; }
     .status { margin-top:18px; padding:12px; background:#edf5fc; border-radius:10px; font-size:13px; }
     .status p { margin:0; }
@@ -160,7 +161,11 @@
           <div class="voice-panel">
             <p id="voiceStatus" role="status" aria-live="polite">Voice playback will appear here.</p>
             <audio id="audioPlayer" controls preload="metadata" aria-label="Sky’s generated WAV answer" hidden></audio>
-            <button id="replayButton" type="button" disabled>Read answer again</button>
+            <div class="voice-actions">
+              <button id="replayButton" type="button" disabled>Read answer again</button>
+              <button id="saveVoiceButton" type="button" hidden>Save this answer's voice</button>
+              <button id="clearSavedButton" type="button">Clear saved answers</button>
+            </div>
           </div>
         </div>
       </section>
@@ -171,13 +176,13 @@
   <script>
     'use strict';
     const $ = id => document.getElementById(id);
-    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
+    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','saveVoiceButton','clearSavedButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
     const chips = Array.from(document.querySelectorAll('.chip'));
     const micSupported = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
     const speechSupported = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
     let busy = false, acquiringMic = false, recorder = null, stream = null;
     let recordingTimeout = null, elapsedTimer = null, audioUrl = null, lastAnswer = null;
-    let disposed = false, speechFinish = null;
+    let disposed = false, speechFinish = null, lastWav = null;
     const requests = new Set();
 
     function updateControls() {
@@ -187,6 +192,8 @@
       ui.uploadButton.disabled = locked || !ui.audioFile.files.length;
       ui.recordButton.disabled = busy || acquiringMic || !micSupported;
       ui.replayButton.disabled = locked || !lastAnswer;
+      ui.saveVoiceButton.disabled = locked;
+      ui.clearSavedButton.disabled = locked;
       ui.healthButton.disabled = locked;
       ui.recordButton.setAttribute('aria-pressed', String(recording));
       ui.recordLabel.textContent = recording ? 'Stop recording & send' : acquiringMic ? 'Requesting microphone…' : 'Record a question';
@@ -252,7 +259,8 @@
           throw new Error(`${path} failed (${response.status}): ${detail || response.statusText}`);
         }
         // Consume the body before clearing the timeout, including model audio downloads.
-        return options.audio ? await response.blob() : await response.json();
+        if (options.audio) return { blob: await response.blob(), source: response.headers.get('X-Sky-Source') || 'generated' };
+        return await response.json();
       } catch (error) {
         if (error.name === 'AbortError') throw new Error(`${path} timed out. The server may still be processing; please try again later.`);
         if (error instanceof TypeError) throw new Error(`Cannot reach ${path}. Check the server connection and try again. ${error.message}`);
@@ -351,23 +359,31 @@
       cancelSpeech();
       const answer = lastAnswer;
       if (ui.voice.value === 'browser') { await browserVoice(answer); return; }
-      ui.voiceStatus.textContent = 'Generating F5-TTS audio. Your text answer is ready above.';
-      progress('Generating F5-TTS voice… CPU processing may take several minutes.');
-      const blob = await request('/tts', {
+      ui.saveVoiceButton.hidden = true;
+      lastWav = null;
+      ui.voiceStatus.textContent = 'Getting the voice. Your text answer is ready above.';
+      progress('Getting the voice… a new answer takes about 20 seconds with F5-TTS.');
+      const started = performance.now();
+      const { blob, source } = await request('/tts', {
         method:'POST', headers:{ 'Content-Type':'application/json' },
         body:JSON.stringify({ username:'default', text:answer.answer }), audio:true
       }, 600000);
+      const took = ((performance.now() - started) / 1000).toFixed(1);
+      const origin = source === 'saved'
+        ? `Saved answer: played in ${took} s, no F5-TTS needed.`
+        : `Made live by F5-TTS in ${took} s.`;
       if (!blob.size) throw new Error('F5-TTS returned an empty audio file. Your text answer is still available.');
       if (disposed) return;
       audioUrl = URL.createObjectURL(new Blob([blob], { type:'audio/wav' }));
       ui.audioPlayer.src = audioUrl;
       ui.audioPlayer.hidden = false;
-      ui.voiceStatus.textContent = 'F5-TTS WAV is ready. Use the audio controls to listen.';
+      if (source !== 'saved') { lastWav = { blob, text:answer.answer }; ui.saveVoiceButton.hidden = false; }
+      ui.voiceStatus.textContent = `${origin} Use the audio controls to listen.`;
       try {
         await ui.audioPlayer.play();
-        ui.voiceStatus.textContent = 'Playing F5-TTS audio. Use the controls to pause or replay.';
+        ui.voiceStatus.textContent = `${origin} Playing now.`;
       } catch {
-        ui.voiceStatus.textContent = 'F5-TTS WAV is ready. Press play in the audio controls to listen.';
+        ui.voiceStatus.textContent = `${origin} Press play in the audio controls to listen.`;
       }
     }
 
@@ -510,7 +526,28 @@
       showError(new Error('The generated WAV could not be played by this browser. Try generating voice again.'));
       ui.voiceStatus.textContent = 'Audio playback failed. Your text answer is still available.';
     });
-    ui.audioPlayer.addEventListener('ended', () => { ui.voiceStatus.textContent = 'F5-TTS playback finished. Use the controls to listen again.'; });
+    ui.audioPlayer.addEventListener('ended', () => { ui.voiceStatus.textContent = 'Playback finished. Use the controls to listen again.'; });
+    ui.saveVoiceButton.addEventListener('click', async () => {
+      if (busy || !lastWav) return;
+      clearError();
+      const form = new FormData();
+      form.append('file', lastWav.blob, 'answer.wav');
+      form.append('username', 'default');
+      form.append('text', lastWav.text);
+      try {
+        await request('/demo/save_answer', { method:'POST', body:form });
+        ui.saveVoiceButton.hidden = true;
+        ui.voiceStatus.textContent = 'Saved. The next time someone gets this answer, it plays right away.';
+      } catch (error) { showError(error); }
+    });
+    ui.clearSavedButton.addEventListener('click', async () => {
+      if (busy) return;
+      clearError();
+      try {
+        const result = await request('/demo/clear_saved', { method:'POST' });
+        ui.voiceStatus.textContent = `Cleared ${result.removed} saved answer(s). F5-TTS will make each answer live again.`;
+      } catch (error) { showError(error); }
+    });
     ui.healthButton.addEventListener('click', () => { clearError(); void health(); });
     if (!micSupported) ui.micHint.textContent = window.isSecureContext
       ? 'Microphone recording is unavailable in this browser. You can type or upload an audio file.'

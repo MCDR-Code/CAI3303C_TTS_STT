@@ -4,3 +4,4 @@ __pycache__/
 gen_audio/
 *.log
 .env
+saved_answers/

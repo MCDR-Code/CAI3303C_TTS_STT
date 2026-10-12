@@ -83,6 +83,33 @@ class SkyDemoTests(unittest.TestCase):
         self.assertEqual(response.data, b"RIFFdata")
         self.assertTrue(post.call_args[0][0].endswith("/tts"))
 
+    def test_saved_answer_plays_without_tts(self):
+        import tempfile
+        from pathlib import Path
+        wav = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 40
+        with tempfile.TemporaryDirectory() as folder, patch.object(app, "SAVED_DIR", Path(folder)):
+            # nothing saved yet: the TTS server is asked
+            fake = MagicMock(status_code=200, content=wav, headers={"Content-Type": "audio/wav"})
+            with patch.object(app.requests, "post", return_value=fake) as post:
+                first = self.client.post("/tts", json={"username": "default", "text": "Hi"})
+            self.assertEqual(first.headers["X-Sky-Source"], "generated")
+            self.assertEqual(post.call_count, 1)
+            # save it, then the same answer plays without calling the TTS server
+            saved = self.client.post("/demo/save_answer", content_type="multipart/form-data", data={
+                "file": (io.BytesIO(wav), "answer.wav"), "username": "default", "text": "Hi"})
+            self.assertEqual(saved.status_code, 200)
+            with patch.object(app.requests, "post") as post:
+                second = self.client.post("/tts", json={"username": "default", "text": "Hi"})
+            post.assert_not_called()
+            self.assertEqual(second.headers["X-Sky-Source"], "saved")
+            self.assertEqual(second.data, wav)
+            # a different answer is not affected, and non-WAV uploads are refused
+            bad = self.client.post("/demo/save_answer", content_type="multipart/form-data", data={
+                "file": (io.BytesIO(b"not audio"), "x.wav"), "username": "default", "text": "Hi"})
+            self.assertEqual(bad.status_code, 400)
+            cleared = self.client.post("/demo/clear_saved").json
+            self.assertEqual(cleared["removed"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

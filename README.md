@@ -47,6 +47,12 @@ Open **http://localhost:5001**. If the TTS server isn't running, the script star
 - To show another language, **speak or upload** the question (for example "¿Hablas criollo?"). Whisper translates it to English and Sky answers in English. Typed questions must be in English.
 - Voice output: **Browser voice (fast)** uses the browser's built-in voice, not F5-TTS. Say so if you use it. **F5-TTS (model)** asks the TTS server to generate the audio.
 
+## Saved answers (faster replies)
+
+F5-TTS takes about 20 seconds to speak a new answer. Because Sky's six FAQ answers are fixed, the page offers **Save this answer's voice** after F5-TTS makes one. The next time any question leads to that answer, the saved WAV plays right away. **Clear saved answers** removes them so F5-TTS makes every answer live again. Saved files go in `saved_answers/`, which is not uploaded to GitHub.
+
+This only works because the answers never change. If Sky looked answers up on the college website or used an LLM, every answer would be new text, and the voice would have to be made live each time.
+
 ## Run the command-line version
 
 ```powershell
