@@ -6,3 +6,4 @@ numpy
 scikit-learn
 openai-whisper
 sounddevice
+imageio-ffmpeg     # provides ffmpeg if it is not installed (Whisper needs it to read recordings)

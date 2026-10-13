@@ -5,3 +5,4 @@ gen_audio/
 *.log
 .env
 saved_answers/
+.ffmpeg/

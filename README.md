@@ -20,7 +20,7 @@ Requirements:
 - Windows 10 or 11, and about 10 GB of free disk space
 - **Python 3.12**. Check in PowerShell with `python --version`. If it is missing, install it from python.org and tick **"Add python.exe to PATH"**, or run `winget install Python.Python.3.12`.
 - **Git**: `winget install Git.Git`
-- **ffmpeg** (Whisper uses it to read recordings): `winget install Gyan.FFmpeg`
+- **ffmpeg** (Whisper uses it to read recordings): nothing to do. If it is not installed, the demo uses a copy that Setup-Demo.ps1 installs with pip (`imageio-ffmpeg`)
 - A microphone, to speak to Sky (optional: you can also type or upload a recording)
 - **Recommended: an NVIDIA graphics card.** Each new spoken answer takes about 7 seconds on an RTX 2080 Super, but much longer on a CPU or a power-limited laptop graphics card.
 
@@ -135,7 +135,7 @@ Everything works, but each new voice takes several minutes on the CPU. To keep t
 | `python` is not recognized, or the version is not 3.12 | Install Python 3.12 with "Add python.exe to PATH", then open a new PowerShell |
 | Setup-TTS fails at the F5-TTS step, or the `F5-TTS` folder is empty | The repository was downloaded as a ZIP. Delete it and use `git clone --recurse-submodules` (step 2) |
 | "The TTS environment was not found" | Keep both repositories in the same parent folder, or set `SKY_TTS_ROOT` to the CAI3303C_F5-TTS folder |
-| Recordings fail with an ffmpeg error | Install ffmpeg (`winget install Gyan.FFmpeg`) and open a new PowerShell |
+| Recordings fail with an ffmpeg error ("No such file or directory: 'ffmpeg'") | Run `.\Setup-Demo.ps1` again (it installs a bundled ffmpeg) and restart the demo. If it still fails, install ffmpeg yourself (`winget install Gyan.FFmpeg`, or `brew install ffmpeg` on a Mac), then close and reopen PowerShell or VS Code completely |
 | The microphone button does nothing | The microphone needs `localhost` or https. On the demo computer use http://localhost:5001; from another device use the Cloudflare tunnel address. Also allow microphone access in the browser |
 | Voice takes minutes | PyTorch is on the CPU. Run `.\Enable-GPU.ps1` in CAI3303C_F5-TTS (NVIDIA cards only) |
 | Voice is slow on a laptop even with the GPU | Run `nvidia-smi -q -d PERFORMANCE` while it speaks. If **SW Power Cap** is Active, the laptop's power mode limits the card: set the maker's thermal mode to Performance (Dell: Thermal Management → Ultra Performance) |

@@ -126,6 +126,12 @@ def recorded_answer():
         return jsonify(result)
     except ImportError:
         return jsonify(error="Whisper is not installed. Run Setup-Demo.ps1."), 503
+    except FileNotFoundError as error:
+        if "ffmpeg" in str(error).lower():
+            return jsonify(error="ffmpeg is not installed on the computer running the demo, and Whisper needs it to "
+                                 "read recordings. Install it (Windows: winget install Gyan.FFmpeg, Mac: brew install "
+                                 "ffmpeg), close and reopen the terminal or VS Code, and start the demo again."), 503
+        return jsonify(error=f"Could not transcribe this recording: {str(error)[:500]}"), 422
     except Exception as error:
         return jsonify(error=f"Could not transcribe this recording: {str(error)[:500]}"), 422
     finally:

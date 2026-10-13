@@ -50,6 +50,15 @@ class SkyDemoTests(unittest.TestCase):
         self.assertEqual(response.json["language"], "en")
         self.assertIn("A speech to text model called Whisper", response.json["answer"])
 
+    def test_missing_ffmpeg_gives_clear_message(self):
+        with patch.dict(sys.modules, {"whisper": MagicMock()}), \
+             patch.object(app, "speech_to_text", side_effect=FileNotFoundError(2, "No such file or directory", "ffmpeg")), \
+             patch.object(app, "whisper_model", MagicMock()):
+            response = self.client.post("/demo/transcribe", content_type="multipart/form-data",
+                                        data={"file": (io.BytesIO(b"fake audio"), "q.m4a")})
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("ffmpeg is not installed", response.json["error"])
+
     def test_validation(self):
         for payload in [None, [], {}, {"text": 2}, {"text": ""}]:
             self.assertEqual(self.client.post("/demo/answer", json=payload).status_code, 400)
