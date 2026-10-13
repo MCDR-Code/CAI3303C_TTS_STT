@@ -158,7 +158,7 @@
             <div><label for="voice">Voice output</label><select id="voice"><option value="model" selected>F5-TTS (model)</option><option value="browser">Browser voice (not the model)</option></select></div>
           </div>
           <p class="hint" id="typingHint">Type questions in English. Spoken questions can be in many languages. Sky answers in English.</p>
-          <p class="warning" id="modelWarning">F5-TTS runs on the server’s graphics card and takes about 20 seconds.</p>
+          <p class="warning" id="modelWarning">F5-TTS runs on the server’s graphics card: a new answer takes about 7 seconds.</p>
           <button class="primary ask" id="askButton" type="submit">Ask Sky →</button>
         </form>
         <div class="examples"><span class="label">Try one of the six FAQ topics</span><div class="chips" id="examples">
@@ -205,6 +205,7 @@
             <div class="voice-actions">
               <button id="replayButton" type="button" disabled>Read answer again</button>
               <button id="cancelVoiceButton" type="button" class="stop" hidden>Stop, wrong question</button>
+              <button id="stopPlayButton" type="button" class="stop" hidden>■ Stop playing</button>
               <button id="saveVoiceButton" type="button" hidden>Save this answer's voice</button>
               <button id="clearSavedButton" type="button">Clear saved answers</button>
             </div>
@@ -218,13 +219,14 @@
   <script>
     'use strict';
     const $ = id => document.getElementById(id);
-    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','saveVoiceButton','clearSavedButton','cancelVoiceButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
+    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','saveVoiceButton','clearSavedButton','cancelVoiceButton','stopPlayButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
     const chips = Array.from(document.querySelectorAll('.chip'));
     const micSupported = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
     const speechSupported = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
     let busy = false, acquiringMic = false, recorder = null, stream = null;
     let recordingTimeout = null, elapsedTimer = null, audioUrl = null, lastAnswer = null;
     let disposed = false, speechFinish = null, lastWav = null, voiceController = null, voiceCancelled = false;
+    let lastOrigin = '', playbackStopped = false;
     const requests = new Set();
 
     function updateControls() {
@@ -270,6 +272,8 @@
       ui.audioPlayer.removeAttribute('src');
       ui.audioPlayer.load();
       ui.audioPlayer.hidden = true;
+      ui.stopPlayButton.hidden = true;
+      lastOrigin = '';
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       audioUrl = null;
     }
@@ -376,7 +380,10 @@
       if (preferred) utterance.voice = preferred;
       ui.voiceStatus.textContent = `Reading in ${answer.language === 'es' ? 'Spanish' : 'English'} with your browser. Available voices depend on your device.`;
       progress('Reading Sky’s answer with the browser voice…');
-      await new Promise((resolve, reject) => {
+      lastOrigin = 'Browser voice (not the model).';
+      playbackStopped = false;
+      ui.stopPlayButton.hidden = false;
+      try { await new Promise((resolve, reject) => {
         let finished = false;
         const finish = error => {
           if (finished) return;
@@ -395,8 +402,8 @@
         utterance.onend = () => finish();
         utterance.onerror = event => finish(new Error(`Browser voice failed (${event.error || 'unknown error'}). Your answer is still available; retry playback or choose F5-TTS.`));
         try { window.speechSynthesis.speak(utterance); } catch (error) { finish(error); }
-      });
-      ui.voiceStatus.textContent = 'Browser voice finished. You can read the answer again.';
+      }); } finally { ui.stopPlayButton.hidden = true; }
+      ui.voiceStatus.textContent = playbackStopped ? 'Browser voice stopped. You can read the answer again.' : 'Browser voice finished. You can read the answer again.';
     }
 
     async function outputVoice() {
@@ -407,7 +414,7 @@
       ui.saveVoiceButton.hidden = true;
       lastWav = null;
       ui.voiceStatus.textContent = 'Getting the voice. Your text answer is ready above.';
-      progress('Getting the voice… a new answer takes about 20 seconds with F5-TTS.');
+      progress('Getting the voice… a new answer takes a few seconds with F5-TTS.');
       const started = performance.now();
       voiceCancelled = false;
       ui.cancelVoiceButton.hidden = false;
@@ -440,6 +447,7 @@
       audioUrl = URL.createObjectURL(new Blob([blob], { type:'audio/wav' }));
       ui.audioPlayer.src = audioUrl;
       ui.audioPlayer.hidden = false;
+      lastOrigin = origin;
       if (source !== 'saved') { lastWav = { blob, text:answer.answer }; ui.saveVoiceButton.hidden = false; }
       ui.voiceStatus.textContent = `${origin} Use the audio controls to listen.`;
       try {
@@ -594,7 +602,19 @@
       showError(new Error('The generated WAV could not be played by this browser. Try generating voice again.'));
       ui.voiceStatus.textContent = 'Audio playback failed. Your text answer is still available.';
     });
-    ui.audioPlayer.addEventListener('ended', () => { ui.voiceStatus.textContent = 'Playback finished. Use the controls to listen again.'; });
+    ui.audioPlayer.addEventListener('play', () => { ui.stopPlayButton.hidden = false; if (lastOrigin) ui.voiceStatus.textContent = `${lastOrigin} Playing now.`; });
+    ui.audioPlayer.addEventListener('pause', () => { if (!ui.audioPlayer.ended) ui.stopPlayButton.hidden = true; });
+    ui.audioPlayer.addEventListener('ended', () => {
+      ui.stopPlayButton.hidden = true;
+      ui.voiceStatus.textContent = `${lastOrigin ? lastOrigin + ' ' : ''}Playback finished. Use the controls to listen again.`;
+    });
+    ui.stopPlayButton.addEventListener('click', () => {
+      playbackStopped = true;
+      ui.stopPlayButton.hidden = true;
+      if (!ui.audioPlayer.paused) { ui.audioPlayer.pause(); ui.audioPlayer.currentTime = 0; }
+      cancelSpeech();
+      ui.voiceStatus.textContent = `${lastOrigin ? lastOrigin + ' ' : ''}Playback stopped. Use the controls to listen again.`;
+    });
     ui.cancelVoiceButton.addEventListener('click', () => {
       voiceCancelled = true;
       if (voiceController) voiceController.abort();

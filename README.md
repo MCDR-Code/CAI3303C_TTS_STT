@@ -22,7 +22,7 @@ Requirements:
 - **Git**: `winget install Git.Git`
 - **ffmpeg** (Whisper uses it to read recordings): `winget install Gyan.FFmpeg`
 - A microphone, to speak to Sky (optional: you can also type or upload a recording)
-- **Recommended: an NVIDIA graphics card.** Each new spoken answer takes about 20 seconds on an RTX 2080 Super, but several minutes on a CPU.
+- **Recommended: an NVIDIA graphics card.** Each new spoken answer takes about 7 seconds on an RTX 2080 Super, but much longer on a CPU or a power-limited laptop graphics card.
 
 After installing anything with winget, close PowerShell and open a new window so it finds the new programs.
 
@@ -73,16 +73,55 @@ Open PowerShell in the folder where you keep projects and run these steps in ord
 
 It opens the TTS server in a second window, then starts the demo. Open **http://localhost:5001** in Chrome or Edge. Leave both windows open while you use it; Ctrl+C in each window stops them.
 
-The **first** spoken answer downloads the F5-TTS model (about 1.3 GB) and can take several minutes. After that, a new answer takes about 20 seconds on a graphics card. Ask one practice question before showing it to anyone.
+The TTS window shows **"Loading F5-TTS into memory (once)..."** and then **"F5-TTS is loaded"**. The very first time, this also downloads the F5-TTS model (about 1.3 GB) and can take several minutes; after that it takes about 15 to 30 seconds. Wait for "F5-TTS is loaded" before asking. Then a new answer takes about 7 seconds on a desktop graphics card. Ask one practice question before showing it to anyone.
 
 ## Using the page
 
 - **Ask:** type a question in English and press **Ask Sky**, click one of the six topic buttons, press **Record a question** (press again to stop and send), or upload a recording. Spoken and uploaded questions can be in many languages: Whisper writes down what you said and translates it to English to find the answer.
 - **The answer** appears first as text, with **"Behind the answer"**: the closest FAQ question, the similarity score, the language heard and the timings. Below the 0.5 threshold, Sky says it does not know instead of guessing.
-- **The voice:** **F5-TTS (model)** is the default. While it is being made, **Stop, wrong question** cancels it. **Browser voice (not the model)** uses Windows' built-in voice instead; it is instant but it is not F5-TTS.
+- **The voice:** **F5-TTS (model)** is the default. While it is being made, **Stop, wrong question** cancels it; while it plays, **■ Stop playing** stops it. The line under the answer keeps the time it took (made live by F5-TTS, or played from a saved answer). **Browser voice (not the model)** uses Windows' built-in voice instead; it is instant but it is not F5-TTS.
 - **Save this answer's voice** keeps the WAV, so the next time that answer comes up it plays instantly. **Clear saved answers** removes them, so F5-TTS makes every answer live again.
 
 Good questions to try: "What is Sky?" (typed), "¿Hablas criollo?" (spoken; Sky understands Spanish and answers in English), and "How much is tuition?" (outside the FAQ, so Sky says it does not know).
+
+## Use it from another device (phone, classroom, another computer)
+
+The demo runs on one Windows computer, but you can open the page from any device with a browser.
+
+**Speaking to Sky (the Record button) needs https.** Browsers only allow the microphone on `localhost` or on an `https://` address. On a plain `http://` address from another device, typing, the topic buttons, uploading a recording and Sky's spoken answers all work, but **Record** is blocked.
+
+### With https: Cloudflare quick tunnel (recommended)
+
+A Cloudflare quick tunnel gives the demo a temporary `https://` address that works from anywhere, including a phone on mobile data. It is free, needs no account and no router changes, and the address only works while the tunnel is running.
+
+1. Download `cloudflared-windows-amd64.exe` from https://github.com/cloudflare/cloudflared/releases/latest (under Assets) and save it, for example, as `C:\Tools\cloudflared.exe`.
+2. Start the demo as usual (`.\Start-Demo.ps1`) and wait for **"F5-TTS is loaded"** in the TTS window.
+3. In a second PowerShell window:
+
+   ```powershell
+   C:\Tools\cloudflared.exe tunnel --url http://localhost:5001
+   ```
+
+4. After a few seconds it prints a box with an address like `https://some-random-words.trycloudflare.com`. Open that address on the other device. The **Record** button works there, because the address is https.
+5. Press **Ctrl+C** in that window when you are done. The address stops working right away.
+
+Notes:
+
+- The address is different every time you start the tunnel, so copy it after each start (for example, text it to yourself).
+- While the tunnel runs, anyone with the address can use the demo, so turn it off afterwards.
+- Keep the computer awake (no sleep, no Windows Update restart) while you present remotely.
+- Quick tunnels are meant for testing and demos and have no uptime guarantee. Try it once before the day you need it.
+
+### Without https: same Wi-Fi or a router port (typing only)
+
+To open the page from another device on the same network, start the demo so it accepts outside connections, in the same PowerShell window:
+
+```powershell
+$env:SKY_HOST = "0.0.0.0"
+.\Start-Demo.ps1
+```
+
+Then open `http://<this computer's IP>:5001` on the other device (`ipconfig` shows the IP). From outside the building you would also need a port forward on the router to port 5001. The demo has no password, so only open it for the time you need it. The Record button does not work this way; use the tunnel above for that.
 
 ## Without an NVIDIA graphics card
 
@@ -97,14 +136,15 @@ Everything works, but each new voice takes several minutes on the CPU. To keep t
 | Setup-TTS fails at the F5-TTS step, or the `F5-TTS` folder is empty | The repository was downloaded as a ZIP. Delete it and use `git clone --recurse-submodules` (step 2) |
 | "The TTS environment was not found" | Keep both repositories in the same parent folder, or set `SKY_TTS_ROOT` to the CAI3303C_F5-TTS folder |
 | Recordings fail with an ffmpeg error | Install ffmpeg (`winget install Gyan.FFmpeg`) and open a new PowerShell |
-| The microphone button does nothing | Use http://localhost:5001 (not the PC's IP address) and allow microphone access in the browser |
+| The microphone button does nothing | The microphone needs `localhost` or https. On the demo computer use http://localhost:5001; from another device use the Cloudflare tunnel address. Also allow microphone access in the browser |
 | Voice takes minutes | PyTorch is on the CPU. Run `.\Enable-GPU.ps1` in CAI3303C_F5-TTS (NVIDIA cards only) |
+| Voice is slow on a laptop even with the GPU | Run `nvidia-smi -q -d PERFORMANCE` while it speaks. If **SW Power Cap** is Active, the laptop's power mode limits the card: set the maker's thermal mode to Performance (Dell: Thermal Management → Ultra Performance) |
 | "TTS server at http://localhost:5000 is not reachable" | Start it with `.\Start-TTS.ps1` in CAI3303C_F5-TTS, or just run `.\Start-Demo.ps1` again |
 | Page looks old after an update | Refresh with Ctrl+F5 |
 
 ## Saved answers (faster replies)
 
-F5-TTS takes about 20 seconds to speak a new answer. Because Sky's six FAQ answers are fixed, the page offers **Save this answer's voice** after F5-TTS makes one. The next time any question leads to that answer, the saved WAV plays right away. **Clear saved answers** removes them so F5-TTS makes every answer live again. Saved files go in `saved_answers/`, which is not uploaded to GitHub.
+F5-TTS takes a few seconds to speak a new answer (longer on a slower graphics card). Because Sky's six FAQ answers are fixed, the page offers **Save this answer's voice** after F5-TTS makes one. The next time any question leads to that answer, the saved WAV plays right away. **Clear saved answers** removes them so F5-TTS makes every answer live again. Saved files go in `saved_answers/`, which is not uploaded to GitHub.
 
 This only works because the answers never change. If Sky looked answers up on the college website or used an LLM, every answer would be new text, and the voice would have to be made live each time.
 
