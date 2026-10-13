@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Giving Sky a Voice - Topic Presentation</title>
+  <style>
+    :root { color-scheme:light; --ink:#183044; --muted:#526878; --blue:#135da4; --line:#dce6ed; --green:#15725c; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:#f3f7fa; font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:0; }
+    header { background:white; border-bottom:1px solid var(--line); }
+    .shell { max-width:960px; margin:auto; padding:0 24px; }
+    .nav { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .brand { font-size:22px; font-weight:700; }
+    .connection { color:var(--muted); font-size:13px; text-align:right; }
+    .nav-links { display:flex; align-items:center; gap:16px; flex-wrap:wrap; justify-content:flex-end; }
+    .next { color:var(--blue); font-weight:600; font-size:14px; text-underline-offset:3px; }
+    main { padding-top:32px !important; padding-bottom:32px !important; }
+    h1 { font-size:34px; line-height:1.2; margin:0 0 8px; overflow-wrap:anywhere; }
+    .subtitle { margin:0 0 28px; color:var(--muted); }
+    .workspace { background:white; border:1px solid var(--line); border-radius:8px; padding:28px; }
+    label { display:block; font-weight:600; margin-bottom:10px; }
+    textarea { display:block; width:100%; height:180px; min-height:120px; resize:vertical; padding:14px; border:1px solid #bacbd8; border-radius:6px; font:inherit; color:var(--ink); background:#fcfdff; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:18px; }
+    .examples { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+    .examples button { background:#edf5fc; color:var(--blue); border-color:var(--line); font-size:14px; }
+    .examples button:hover:not(:disabled) { background:#dcebf7; }
+    button { min-height:44px; padding:10px 18px; border:1px solid var(--blue); border-radius:6px; font:600 16px system-ui,sans-serif; color:white; background:var(--blue); cursor:pointer; }
+    button:hover:not(:disabled) { background:#0c4b88; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .cancel { background:white; color:#a12d38; border-color:#a12d38; }
+    .cancel:hover:not(:disabled) { background:#fff0f1; }
+    :focus-visible { outline:3px solid #39a1d7; outline-offset:3px; }
+    .output { margin-top:24px; border-top:1px solid var(--line); padding-top:20px; }
+    .status { min-height:48px; margin:0; color:var(--muted); overflow-wrap:anywhere; }
+    .status.ready { color:var(--green); }
+    .error { color:#a12d38; margin:12px 0 0; overflow-wrap:anywhere; }
+    audio { width:100%; height:54px; margin-top:14px; }
+    [hidden] { display:none !important; }
+    @media (max-width:600px) { .shell { padding:0 16px; } main { padding-top:24px !important; } h1 { font-size:28px; } .workspace { padding:18px; } textarea { height:200px; } }
+  </style>
+</head>
+<body>
+  <header><div class="shell nav"><span class="brand">Sky</span><span class="nav-links"><span class="connection" id="connection" role="status">Checking connection...</span><a class="next" href="/">Full prototype →</a></span></div></header>
+  <main class="shell">
+    <h1>Giving Sky a Voice</h1>
+    <p class="subtitle">Topic Presentation &middot; Text-to-Speech</p>
+    <section class="workspace" aria-label="Text-to-speech demo">
+      <form id="form">
+        <label for="text">Sky's words</label>
+        <div class="examples" aria-label="Example texts">
+          <button type="button" data-text="Hello, I am Sky, Miami Dade College's virtual concierge. Welcome to Giving Sky a Voice.">Meet Sky</button>
+          <button type="button" data-text="Text-to-speech turns written words into spoken audio. This voice comes from the F5-TTS model.">Sky's voice</button>
+          <button type="button" data-text="Our early prototype connects speech recognition with speech generation. Today, we are demonstrating the text-to-speech part.">Our project</button>
+        </div>
+        <textarea id="text" maxlength="2000" required>Hello, I am Sky, Miami Dade College's virtual concierge. Welcome to Giving Sky a Voice.</textarea>
+        <div class="actions"><button id="generate" type="submit">Generate voice</button><button id="cancel" class="cancel" type="button" hidden>Cancel</button></div>
+      </form>
+      <div class="output">
+        <p id="status" class="status" role="status" aria-live="polite">Ready</p>
+        <p id="error" class="error" role="alert" hidden></p>
+        <audio id="audio" controls preload="metadata" aria-label="Sky's generated voice" hidden></audio>
+      </div>
+    </section>
+  </main>
+  <script>
+    'use strict';
+    const ui = Object.fromEntries(['form','text','generate','cancel','status','error','audio','connection'].map(id => [id, document.getElementById(id)]));
+    const examples = Array.from(document.querySelectorAll('[data-text]'));
+    let controller = null, audioUrl = null, disposed = false;
+    function clearAudio() {
+      ui.audio.pause();
+      ui.audio.removeAttribute('src');
+      ui.audio.load();
+      ui.audio.hidden = true;
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      audioUrl = null;
+    }
+    async function health() {
+      try {
+        const response = await fetch('/health', {signal:AbortSignal.timeout(10000)});
+        const data = await response.json();
+        ui.connection.textContent = response.ok && data.tts_status === 'running' ? 'Voice server connected' : response.ok && data.tts_status && !['offline','error','unhealthy'].includes(data.tts_status) ? 'Voice server connected' : 'Voice server unavailable';
+      } catch { ui.connection.textContent = 'Voice server unavailable'; }
+    }
+    ui.form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (controller) return;
+      const text = ui.text.value.trim();
+      if (!text) { ui.text.focus(); return; }
+      clearAudio();
+      ui.error.hidden = true;
+      ui.status.classList.remove('ready');
+      ui.status.textContent = 'Generating voice...';
+      ui.text.disabled = ui.generate.disabled = true;
+      examples.forEach(button => { button.disabled = true; });
+      ui.cancel.hidden = false;
+      const active = new AbortController();
+      controller = active;
+      const started = performance.now();
+      const ticker = setInterval(() => { ui.status.textContent = `Generating voice... ${Math.floor((performance.now() - started) / 1000)} s`; }, 1000);
+      const timeout = setTimeout(() => active.abort('timeout'), 600000);
+      try {
+        const response = await fetch('/topic/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text}), signal:active.signal});
+        if (!response.ok) {
+          let detail = 'Voice generation failed. Try again.';
+          try { const data = await response.json(); detail = data.error || data.message || detail; } catch { /* Non-JSON server error. */ }
+          throw new Error(response.status === 429 ? 'The voice server is busy. Wait a moment and try again.' : detail);
+        }
+        const blob = await response.blob();
+        if (!blob.size || !blob.type.startsWith('audio/')) throw new Error('The voice server did not return audio. Try again.');
+        if (disposed) return;
+        clearInterval(ticker);
+        const seconds = ((performance.now() - started) / 1000).toFixed(1);
+        audioUrl = URL.createObjectURL(blob);
+        ui.audio.src = audioUrl;
+        ui.audio.hidden = false;
+        ui.status.textContent = `Generated live in ${seconds} s`;
+        ui.status.classList.add('ready');
+        try { await ui.audio.play(); } catch { ui.status.textContent += '. Press play to listen.'; }
+      } catch (error) {
+        if (disposed) return;
+        ui.status.textContent = active.signal.aborted ? active.signal.reason === 'timeout' ? 'Generation timed out' : 'Generation cancelled' : 'Voice unavailable';
+        if (!active.signal.aborted) { ui.error.textContent = error.message; ui.error.hidden = false; }
+      } finally {
+        clearInterval(ticker);
+        clearTimeout(timeout);
+        controller = null;
+        ui.text.disabled = ui.generate.disabled = false;
+        examples.forEach(button => { button.disabled = false; });
+        ui.cancel.hidden = true;
+      }
+    });
+    ui.cancel.addEventListener('click', () => controller?.abort());
+    examples.forEach(button => button.addEventListener('click', () => {
+      if (controller) return;
+      ui.text.value = button.dataset.text;
+      ui.form.requestSubmit();
+    }));
+    ui.audio.addEventListener('error', () => { if (audioUrl) { ui.error.textContent = 'Audio playback failed. Generate the voice again.'; ui.error.hidden = false; } });
+    window.addEventListener('pagehide', () => { disposed = true; controller?.abort(); clearAudio(); });
+    window.addEventListener('pageshow', event => { if (event.persisted) { disposed = false; void health(); } });
+    void health();
+  </script>
+</body>
+</html>

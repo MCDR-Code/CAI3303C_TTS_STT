@@ -84,6 +84,12 @@ The TTS window shows **"Loading F5-TTS into memory (once)..."** and then **"F5-T
 
 Good questions to try: "What is Sky?" (typed), "¿Hablas criollo?" (spoken; Sky understands Spanish and answers in English), and "How much is tuition?" (outside the FAQ, so Sky says it does not know).
 
+## Topic screen (text to speech only)
+
+A simpler page for the topic presentation: type any text (or pick an example) and F5-TTS speaks it, showing how long it took. It always generates live; saved answers are not used. Open it at **http://localhost:5001/topic** while the demo runs, or add `/topic` to the Cloudflare address. The two pages link to each other ("Full prototype →" and "← Topic screen").
+
+`Start-TTSDemo.ps1` runs a second copy of the app on port 5002 that accepts connections from the network (http://localhost:5002/topic). It is optional: the same page is already on port 5001.
+
 ## Use it from another device (phone, classroom, another computer)
 
 The demo runs on one Windows computer, but you can open the page from any device with a browser.

@@ -129,6 +129,8 @@
     .about { margin:14px 0; padding:12px 18px; }
     footer { padding-bottom:16px; }
     .voice-actions button { font-size:13px; padding:6px 11px; }
+    .question-row { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+    .speak-q { font-size:12px; padding:3px 10px; border-radius:20px; background:#edf5fc; border-color:#c9def0; color:var(--blue); }
     .voice-actions .stop { background:#fff0f1; border-color:#e2a7ac; color:var(--red); }
   </style>
 </head>
@@ -137,6 +139,7 @@
     <div class="shell nav">
       <div class="brand"><div class="mark" aria-hidden="true">S</div><div><strong>Sky</strong><small>Miami Dade College · School demo</small></div></div>
       <div class="nav-right">
+        <a href="/topic">← Topic screen (text to speech)</a>
         <div id="connection" class="connection" data-state="checking" role="status"><span class="dot" aria-hidden="true"></span><span id="connectionText">Checking connection…</span></div>
         <a href="/studio">Open voice studio (TTS server) ↗</a>
       </div>
@@ -185,7 +188,7 @@
         <div class="answer-head"><h2 id="answerTitle">Sky’s answer</h2><span class="badge" id="answerBadge" hidden></span></div>
         <div id="empty" class="empty"><div class="orb" aria-hidden="true">✦</div><strong>Ready when you are</strong><p>Your answer will appear here first.<br>Then Sky will read it aloud.</p></div>
         <div id="result" hidden>
-          <p class="question" id="heardQuestion"></p>
+          <div class="question-row"><p class="question" id="heardQuestion"></p><button id="speakQuestionButton" type="button" class="speak-q" hidden title="F5-TTS reads your typed question aloud">🔊 Hear my question</button></div>
           <p class="answer-text" id="answerText" aria-live="polite" aria-atomic="true"></p>
           <div class="translation" id="translation" hidden><strong>English used for FAQ matching</strong><span id="englishText"></span></div>
           <div class="metadata" aria-label="FAQ match scores and processing timings">
@@ -219,14 +222,14 @@
   <script>
     'use strict';
     const $ = id => document.getElementById(id);
-    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','saveVoiceButton','clearSavedButton','cancelVoiceButton','stopPlayButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
+    const ui = Object.fromEntries(['questionForm','questionInput','voice','askButton','modelWarning','recordButton','recordLabel','audioFile','uploadButton','status','statusText','elapsed','error','answerCard','empty','result','answerBadge','heardQuestion','speakQuestionButton','answerText','translation','englishText','matched','detectedLanguage','score','threshold','transcribeTime','answerTime','voiceStatus','audioPlayer','replayButton','saveVoiceButton','clearSavedButton','cancelVoiceButton','stopPlayButton','healthButton','connection','connectionText','micHint'].map(id => [id, $(id)]));
     const chips = Array.from(document.querySelectorAll('.chip'));
     const micSupported = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
     const speechSupported = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
     let busy = false, acquiringMic = false, recorder = null, stream = null;
     let recordingTimeout = null, elapsedTimer = null, audioUrl = null, lastAnswer = null;
     let disposed = false, speechFinish = null, lastWav = null, voiceController = null, voiceCancelled = false;
-    let lastOrigin = '', playbackStopped = false;
+    let lastOrigin = '', playbackStopped = false, lastTypedQuestion = '';
     const requests = new Set();
 
     function updateControls() {
@@ -236,6 +239,7 @@
       ui.uploadButton.disabled = locked || !ui.audioFile.files.length;
       ui.recordButton.disabled = busy || acquiringMic || !micSupported;
       ui.replayButton.disabled = locked || !lastAnswer;
+      ui.speakQuestionButton.disabled = locked;
       ui.saveVoiceButton.disabled = locked;
       ui.clearSavedButton.disabled = locked;
       ui.healthButton.disabled = locked;
@@ -356,6 +360,7 @@
       ui.answerBadge.textContent = data.fallback ? 'Outside the FAQ' : 'FAQ answer';
       ui.answerBadge.classList.toggle('fallback', !!data.fallback);
       ui.heardQuestion.textContent = `Your question: ${typeof data.question === 'string' ? data.question : ''}`;
+      ui.speakQuestionButton.hidden = !lastTypedQuestion;
       ui.answerText.textContent = answer;
       ui.translation.hidden = !(typeof data.english === 'string' && data.english.trim());
       ui.englishText.textContent = typeof data.english === 'string' ? data.english : '';
@@ -406,10 +411,10 @@
       ui.voiceStatus.textContent = playbackStopped ? 'Browser voice stopped. You can read the answer again.' : 'Browser voice finished. You can read the answer again.';
     }
 
-    async function outputVoice() {
+    async function outputVoice(target = null, label = '') {
       clearAudio();
       cancelSpeech();
-      const answer = lastAnswer;
+      const answer = target || lastAnswer;
       if (ui.voice.value === 'browser') { await browserVoice(answer); return; }
       ui.saveVoiceButton.hidden = true;
       lastWav = null;
@@ -439,9 +444,9 @@
       }
       const { blob, source } = result;
       const took = ((performance.now() - started) / 1000).toFixed(1);
-      const origin = source === 'saved'
+      const origin = (label ? label + ' ' : '') + (source === 'saved'
         ? `Saved answer: played in ${took} s, no F5-TTS needed.`
-        : `Made live by F5-TTS in ${took} s.`;
+        : `Made live by F5-TTS in ${took} s.`);
       if (!blob.size) throw new Error('F5-TTS returned an empty audio file. Your text answer is still available.');
       if (disposed) return;
       audioUrl = URL.createObjectURL(new Blob([blob], { type:'audio/wav' }));
@@ -460,6 +465,8 @@
 
     async function processQuestion(path, options) {
       if (busy || disposed) return;
+      lastTypedQuestion = '';
+      if (path === '/demo/answer') { try { lastTypedQuestion = JSON.parse(options.body).text || ''; } catch { lastTypedQuestion = ''; } }
       busy = true;
       clearError();
       cancelSpeech();
@@ -614,6 +621,18 @@
       if (!ui.audioPlayer.paused) { ui.audioPlayer.pause(); ui.audioPlayer.currentTime = 0; }
       cancelSpeech();
       ui.voiceStatus.textContent = `${lastOrigin ? lastOrigin + ' ' : ''}Playback stopped. Use the controls to listen again.`;
+    });
+    ui.speakQuestionButton.addEventListener('click', async () => {
+      if (busy || recorder || acquiringMic || !lastTypedQuestion) return;
+      busy = true;
+      clearError();
+      updateControls();
+      try { await outputVoice({ answer:lastTypedQuestion, language:'en' }, 'Your question:'); }
+      catch (error) {
+        if (voiceCancelled) ui.voiceStatus.textContent = 'Voice stopped.';
+        else { showError(error); ui.voiceStatus.textContent = 'Voice output failed. Your text answer is still available.'; }
+      }
+      finally { busy = false; endProgress(); updateControls(); }
     });
     ui.cancelVoiceButton.addEventListener('click', () => {
       voiceCancelled = true;

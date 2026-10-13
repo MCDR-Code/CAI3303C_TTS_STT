@@ -71,6 +71,12 @@ def voice_studio():
     return redirect(f"{TTS_URL}/studio")
 
 
+@app.get("/topic")
+@app.get("/topic/")
+def topic_page():
+    return send_file(HERE / "topic.html")
+
+
 @app.get("/health")
 def health():
     """The demo itself is up; also report whether the TTS server can be reached."""
@@ -158,6 +164,20 @@ def speak():
             response = send_file(saved, mimetype="audio/wav")
             response.headers["X-Sky-Source"] = "saved"
             return response
+    return forward_tts(payload)
+
+
+@app.post("/topic/tts")
+def topic_speech():
+    payload = request.get_json(silent=True)
+    text = payload.get("text") if isinstance(payload, dict) else None
+    if not isinstance(text, str) or not text.strip() or len(text) > 2000:
+        return jsonify(error="Enter text between 1 and 2000 characters."), 400
+    # Always generate live audio for the topic presentation's timing demonstration.
+    return forward_tts({"username": "default", "text": text.strip()})
+
+
+def forward_tts(payload):
     try:
         reply = requests.post(f"{TTS_URL}/tts", json=payload, timeout=600)
     except requests.RequestException:

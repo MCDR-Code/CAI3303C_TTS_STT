@@ -73,7 +73,26 @@ class SkyDemoTests(unittest.TestCase):
     def test_pages(self):
         with self.client.get("/") as response:
             self.assertEqual(response.status_code, 200)
+        with self.client.get("/topic") as response:
+            self.assertEqual(response.status_code, 200)
         self.assertEqual(self.client.get("/studio").status_code, 302)
+
+    def test_topic_speech_always_generates_live(self):
+        fake = MagicMock(status_code=200, content=b"RIFFdata", headers={"Content-Type": "audio/wav"})
+        with patch.object(app, "saved_path") as saved, \
+             patch.object(app.requests, "post", return_value=fake) as post:
+            response = self.client.post("/topic/tts", json={"text": " Hello Sky ", "username": "other"})
+        saved.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Sky-Source"], "generated")
+        self.assertEqual(response.data, b"RIFFdata")
+        post.assert_called_once_with(f"{app.TTS_URL}/tts", json={"username": "default", "text": "Hello Sky"}, timeout=600)
+
+    def test_topic_speech_validation(self):
+        with patch.object(app.requests, "post") as post:
+            for payload in [None, [], {}, {"text": 2}, {"text": " "}, {"text": "x" * 2001}]:
+                self.assertEqual(self.client.post("/topic/tts", json=payload).status_code, 400)
+        post.assert_not_called()
 
     def test_tts_server_offline(self):
         with patch.object(app.requests, "get", side_effect=requests.ConnectionError()):
@@ -112,6 +131,7 @@ class SkyDemoTests(unittest.TestCase):
             post.assert_not_called()
             self.assertEqual(second.headers["X-Sky-Source"], "saved")
             self.assertEqual(second.data, wav)
+            second.close()
             # a different answer is not affected, and non-WAV uploads are refused
             bad = self.client.post("/demo/save_answer", content_type="multipart/form-data", data={
                 "file": (io.BytesIO(b"not audio"), "x.wav"), "username": "default", "text": "Hi"})
